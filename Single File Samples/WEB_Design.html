@@ -1,0 +1,313 @@
+<html>
+<head>
+	<title>MASTER YAHOO: PILOT OF THE GALAXY</title>
+	<style>
+		body {
+			background-color: black;
+			color: white;
+			margin: 0;
+			overflow: hidden;
+			font-family: Arial, sans-serif;
+		}
+		h1 {
+			text-align: center;
+			font-size: 50px;
+			color: cyan;
+			animation: glow 1s infinite alternate;
+		}
+		@keyframes glow {
+			from { text-shadow: 0 0 10px cyan; }
+			to { text-shadow: 0 0 20px white; }
+		}
+		#spaceship {
+			position: absolute;
+			bottom: 20px;
+			left: 50%;
+			transform: translateX(-50%);
+			width: 100px;
+			transition: transform 0.1s;
+		}
+		.laser {
+			position: absolute;
+			width: 4px;
+			height: 20px;
+			background: red;
+		}
+		.alien, .boss {
+			position: absolute;
+			top: -60px;
+		}
+		.alien { width: 50px; }
+		.boss { width: 150px; }
+		.powerup {
+			position: absolute;
+			width: 30px;
+			top: -40px;
+		}
+		.shield {
+			position: absolute;
+			width: 120px;
+			height: 120px;
+			border: 3px solid cyan;
+			border-radius: 50%;
+			top: -999px;
+		}
+		#score {
+			position: fixed;
+			top: 10px;
+			right: 10px;
+			font-size: 24px;
+			color: yellow;
+		}
+		canvas {
+			position: absolute;
+			top: 0;
+			left: 0;
+		}
+	</style>
+</head>
+<body>
+	<h1>MASTER YAHOO: PILOT OF THE GALAXY</h1>
+	<div id="score">Score: 0</div>
+	<img id="spaceship" src="https://upload.wikimedia.org/wikipedia/commons/3/3a/Space_Shuttle_Icon.png">
+	<div id="shield" class="shield"></div>
+
+	<canvas id="starCanvas"></canvas>
+
+	<audio id="explosionSound">
+		<source src="https://www.soundjay.com/mechanical/sounds/explosion-01.mp3" type="audio/mpeg">
+	</audio>
+
+	<script>
+		let score = 0;
+		let body = document.body;
+		let spaceship = document.getElementById('spaceship');
+		let shield = document.getElementById('shield');
+		let explosionSound = document.getElementById('explosionSound');
+		let scoreBoard = document.getElementById('score');
+		let shipSpeed = 15;
+		let shootCooldown = 500; // 0.5 sec
+		let canShoot = true;
+		let shieldActive = false;
+
+		// Spaceship Movement
+		document.addEventListener('keydown', function(event) {
+			let left = spaceship.offsetLeft;
+			if (event.key === 'ArrowLeft' || event.key === 'a') {
+				if (left > 0) spaceship.style.left = (left - shipSpeed) + 'px';
+			}
+			if (event.key === 'ArrowRight' || event.key === 'd') {
+				if (left + spaceship.offsetWidth < window.innerWidth)
+					spaceship.style.left = (left + shipSpeed) + 'px';
+			}
+			if (event.code === 'Space') {
+				if (canShoot) {
+					shootLaser();
+					canShoot = false;
+					setTimeout(() => canShoot = true, shootCooldown);
+				}
+			}
+		});
+
+		function shootLaser() {
+			let laser = document.createElement('div');
+			laser.className = 'laser';
+			laser.style.left = (spaceship.offsetLeft + spaceship.offsetWidth/2 - 2) + 'px';
+			laser.style.top = spaceship.offsetTop + 'px';
+			body.appendChild(laser);
+
+			let laserInterval = setInterval(() => {
+				laser.style.top = laser.offsetTop - 10 + 'px';
+				if (laser.offsetTop < -20) {
+					clearInterval(laserInterval);
+					laser.remove();
+				}
+
+				// Alien Hit Check
+				let aliens = document.getElementsByClassName('alien');
+				for (let alien of aliens) {
+					if (isColliding(laser, alien)) {
+						explosionSound.play();
+						alien.remove();
+						laser.remove();
+						clearInterval(laserInterval);
+						score++;
+						scoreBoard.innerText = 'Score: ' + score;
+						checkBoss();
+						break;
+					}
+				}
+
+				// Boss Hit Check
+				let boss = document.getElementsByClassName('boss')[0];
+				if (boss && isColliding(laser, boss)) {
+					explosionSound.play();
+					laser.remove();
+					clearInterval(laserInterval);
+					boss.hp -= 1;
+					if (boss.hp <= 0) {
+						alert('BOSS DEFEATED! MASTER YAHOO WINS!');
+						boss.remove();
+						score += 10;
+						scoreBoard.innerText = 'Score: ' + score;
+					}
+				}
+			}, 30);
+		}
+
+		// Alien Spawner
+		setInterval(() => {
+			let alien = document.createElement('img');
+			alien.src = 'https://upload.wikimedia.org/wikipedia/commons/8/83/Evil-alien-icon.png';
+			alien.className = 'alien';
+			alien.style.left = Math.random() * (window.innerWidth - 50) + 'px';
+			body.appendChild(alien);
+
+			let alienInterval = setInterval(() => {
+				alien.style.top = alien.offsetTop + 3 + 'px';
+				if (alien.offsetTop > window.innerHeight) {
+					if (shieldActive) {
+						shieldActive = false;
+						shield.style.top = '-999px';
+					} else {
+						alert('MASTER YAHOO LOST! GAME OVER.');
+						window.location.reload();
+					}
+					alien.remove();
+					clearInterval(alienInterval);
+				}
+			}, 50);
+		}, 2000);
+
+		// Power-up Drop
+		setInterval(() => {
+			let powerup = document.createElement('img');
+			powerup.src = 'https://upload.wikimedia.org/wikipedia/commons/3/38/Power-up_icon.png';
+			powerup.className = 'powerup';
+			powerup.style.left = Math.random() * (window.innerWidth - 30) + 'px';
+			body.appendChild(powerup);
+
+			let powerupInterval = setInterval(() => {
+				powerup.style.top = powerup.offsetTop + 2 + 'px';
+				if (powerup.offsetTop > window.innerHeight) {
+					powerup.remove();
+					clearInterval(powerupInterval);
+				}
+
+				if (isColliding(powerup, spaceship)) {
+					shipSpeed += 5; // move faster
+					shootCooldown -= 100; // shoot faster
+					if (shootCooldown < 100) shootCooldown = 100;
+					powerup.remove();
+					clearInterval(powerupInterval);
+					alert('POWER-UP GRABBED! FASTER MOVES + LASERS!');
+				}
+			}, 50);
+		}, 10000); // every 10 seconds
+
+		// Activate Boss Alien
+		function checkBoss() {
+			if (score === 10 && !document.getElementsByClassName('boss')[0]) {
+				let boss = document.createElement('img');
+				boss.src = 'https://upload.wikimedia.org/wikipedia/commons/8/83/Evil-alien-icon.png';
+				boss.className = 'boss';
+				boss.style.left = (window.innerWidth / 2 - 75) + 'px';
+				boss.hp = 5;
+				body.appendChild(boss);
+
+				let bossInterval = setInterval(() => {
+					if (!boss) {
+						clearInterval(bossInterval);
+						return;
+					}
+					boss.style.top = boss.offsetTop + 1 + 'px';
+					if (boss.offsetTop > window.innerHeight) {
+						alert('BOSS REACHED EARTH! GAME OVER!');
+						window.location.reload();
+					}
+				}, 50);
+			}
+		}
+
+		// Shield Activation (Press S)
+		document.addEventListener('keydown', function(event) {
+			if (event.key === 's' || event.key === 'S') {
+				if (!shieldActive) {
+					shieldActive = true;
+					shield.style.left = spaceship.offsetLeft - 10 + 'px';
+					shield.style.top = spaceship.offsetTop - 10 + 'px';
+					setTimeout(() => {
+						shieldActive = false;
+						shield.style.top = '-999px';
+					}, 5000);
+				}
+			}
+		});
+
+		// Move shield with spaceship
+		setInterval(() => {
+			if (shieldActive) {
+				shield.style.left = spaceship.offsetLeft - 10 + 'px';
+				shield.style.top = spaceship.offsetTop - 10 + 'px';
+			}
+		}, 50);
+
+		// COLLISION DETECTION
+		function isColliding(a, b) {
+			let aRect = a.getBoundingClientRect();
+			let bRect = b.getBoundingClientRect();
+
+			return !(
+				aRect.bottom < bRect.top ||
+				aRect.top > bRect.bottom ||
+				aRect.right < bRect.left ||
+				aRect.left > bRect.right
+			);
+		}
+
+		// Falling Stars Background
+		let canvas = document.getElementById('starCanvas');
+		let ctx = canvas.getContext('2d');
+		let stars = [];
+
+		function resizeCanvas() {
+			canvas.width = window.innerWidth;
+			canvas.height = window.innerHeight;
+		}
+
+		window.addEventListener('resize', resizeCanvas);
+		resizeCanvas();
+
+		function createStars() {
+			for (let i = 0; i < 100; i++) {
+				stars.push({
+					x: Math.random() * canvas.width,
+					y: Math.random() * canvas.height,
+					radius: Math.random() * 1.5,
+					speed: Math.random() * 0.5 + 0.2
+				});
+			}
+		}
+
+		function drawStars() {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			ctx.fillStyle = 'white';
+			for (let star of stars) {
+				ctx.beginPath();
+				ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+				ctx.fill();
+
+				star.y += star.speed;
+				if (star.y > canvas.height) {
+					star.y = 0;
+					star.x = Math.random() * canvas.width;
+				}
+			}
+			requestAnimationFrame(drawStars);
+		}
+
+		createStars();
+		drawStars();
+	</script>
+</body>
+</html>
